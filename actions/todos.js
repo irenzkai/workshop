@@ -84,3 +84,24 @@ export async function deleteTodo(id) {
 
   revalidatePath('/todos');
 }
+
+export async function updateTodoTitle(id, title) {
+  const userId = await getUserIdFromSession();
+  if (!userId) return { error: 'Unauthorized' };
+
+  const trimmedTitle = title?.trim();
+  if (!trimmedTitle) return { error: 'Title is required.' };
+
+  try {
+    await pool.query('UPDATE todos SET title = $1 WHERE id = $2 AND user_id = $3', [
+      trimmedTitle,
+      id,
+      userId,
+    ]);
+  } catch (err) {
+    console.error(err);
+    return { error: 'Failed to update task.' };
+  }
+
+  revalidatePath('/todos');
+}

@@ -1,25 +1,27 @@
 'use client';
 
-import { useTransition, useRef } from 'react';
-import { addTodo, toggleTodo, deleteTodo } from '../../actions/todos';
+import { useTransition, useRef, useState } from 'react';
+import { addTodo, toggleTodo, deleteTodo, updateTodoTitle } from '../../actions/todos';
 
 export default function TodoListClient({ todos }) {
   const [isPending, startTransition] = useTransition();
   const formRef = useRef(null);
+
+  // States to manage the edit task feature
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState('');
 
   // Status Bar Calculations
   const totalTasks = todos.length;
   const completedTasks = todos.filter((t) => t.completed).length;
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  // Handles dynamic state change when checking/unchecking
   const handleToggle = (id, completed) => {
     startTransition(async () => {
       await toggleTodo(id, completed);
     });
   };
 
-  // Triggers client-side confirmation dialog before executing deletion
   const handleDelete = (id) => {
     if (window.confirm('Are you sure you want to delete this task?')) {
       startTransition(async () => {
@@ -28,10 +30,29 @@ export default function TodoListClient({ todos }) {
     }
   };
 
-  // Resets the input field smoothly upon task addition
   const handleAddAction = async (formData) => {
     await addTodo(formData);
     formRef.current?.reset();
+  };
+
+  // Edit Handlers
+  const handleEditStart = (id, currentTitle) => {
+    setEditingId(id);
+    setEditText(currentTitle);
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditText('');
+  };
+
+  const handleEditSave = (id) => {
+    if (!editText.trim()) return;
+    startTransition(async () => {
+      await updateTodoTitle(id, editText);
+      setEditingId(null);
+      setEditText('');
+    });
   };
 
   return (
@@ -77,35 +98,89 @@ export default function TodoListClient({ todos }) {
         {todos.length === 0 ? (
           <p className="text-gray-500 text-center py-6 text-sm">No tasks yet. Add a task to get started!</p>
         ) : (
-          todos.map((todo) => (
-            <div 
-              key={todo.id} 
-              className={`flex items-center justify-between p-4 bg-gray-50 rounded-xl border transition-all duration-150 ${
-                todo.completed ? 'border-gray-200 opacity-75' : 'border-gray-100 shadow-sm'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={todo.completed}
-                  onChange={() => handleToggle(todo.id, !todo.completed)}
-                  className="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer accent-indigo-600"
-                />
-                <span className={`text-sm font-medium ${
-                  todo.completed ? 'line-through text-gray-400' : 'text-gray-800'
-                }`}>
-                  {todo.title}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleDelete(todo.id)}
-                className="text-sm font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-lg transition duration-150 border border-red-100"
+          todos.map((todo) => {
+            const isEditing = editingId === todo.id;
+
+            return (
+              <div 
+                key={todo.id} 
+                className={`flex items-center justify-between p-4 bg-gray-50 rounded-xl border transition-all duration-150 ${
+                  todo.completed ? 'border-gray-200 opacity-75' : 'border-gray-100 shadow-sm'
+                }`}
               >
-                Delete
-              </button>
-            </div>
-          ))
+                <div className="flex-1 flex items-center gap-3">
+                  {/* Hide Checkbox during editing */}
+                  {!isEditing && (
+                    <input
+                      type="checkbox"
+                      checked={todo.completed}
+                      onChange={() => handleToggle(todo.id, !todo.completed)}
+                      className="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer accent-indigo-600"
+                    />
+                  )}
+                  
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      className="flex-1 px-3 py-1.5 border border-indigo-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900 bg-white"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleEditSave(todo.id);
+                        if (e.key === 'Escape') handleEditCancel();
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <span className={`text-sm font-medium ${
+                      todo.completed ? 'line-through text-gray-400' : 'text-gray-800'
+                    }`}>
+                      {todo.title}
+                    </span>
+                  )}
+                </div>
+
+                {/* Control Action Buttons */}
+                <div className="flex gap-2 ml-4">
+                  {isEditing ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleEditSave(todo.id)}
+                        className="text-sm font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition duration-150 border border-emerald-100"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleEditCancel}
+                        className="text-sm font-semibold text-gray-600 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition duration-150 border border-gray-200"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleEditStart(todo.id, todo.title)}
+                        className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3.5 py-2 rounded-lg transition duration-150 border border-indigo-100"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(todo.id)}
+                        className="text-sm font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-lg transition duration-150 border border-red-100"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
     </div>
