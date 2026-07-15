@@ -18,3 +18,7 @@ export default function LandingPage() {
     </main>
   );
 }
+
+export const metadata = {
+  title: "To-Do",
+};

@@ -51,6 +51,8 @@ export async function getTodos() {
  */
 export async function addTodo(formData) {
   const title = formData.get('title')?.trim();
+  const description = formData.get('description')?.trim(); // Get the description
+
   if (!title) return { error: 'To-do name cannot be empty.' };
 
   try {
@@ -62,7 +64,10 @@ export async function addTodo(formData) {
         'Content-Type': 'application/json',
         ...authHeaders,
       },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ 
+        title, 
+        description: description || "" // Send the description
+      }),
     });
 
     if (!response.ok) {
@@ -106,7 +111,7 @@ export async function toggleTodo(id, completed) {
 /**
  * 4. PATCH - Edit task title on the external API
  */
-export async function updateTodoTitle(id, title) {
+export async function updateTodoTitle(id, title, description) {
   const trimmedTitle = title?.trim();
   if (!trimmedTitle) return { error: 'Title is required.' };
 
@@ -119,15 +124,18 @@ export async function updateTodoTitle(id, title) {
         'Content-Type': 'application/json',
         ...authHeaders,
       },
-      body: JSON.stringify({ title: trimmedTitle }),
+      body: JSON.stringify({ 
+        title: trimmedTitle, 
+        description: description || "" // Send updated description
+      }),
     });
 
     if (!response.ok) {
       throw new Error(`API returned status ${response.status}`);
     }
   } catch (err) {
-    console.error('Error updating external todo title:', err);
-    return { error: 'Failed to update title on the remote API.' };
+    console.error('Error updating external todo:', err);
+    return { error: 'Failed to update on the remote API.' };
   }
 
   revalidatePath('/todos');

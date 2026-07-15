@@ -77,19 +77,22 @@ export default function TodoListClient({ todos }) {
       </div>
 
       {/* 2. Add Task Input Form */}
-      <form ref={formRef} action={handleAddAction} className="flex gap-2">
+      <form ref={formRef} action={handleAddAction} className="flex flex-col gap-2">
         <input
           name="title"
           type="text"
-          placeholder="Add a new task..."
+          placeholder="Task Title..."
           required
-          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 text-sm shadow-sm"
+          className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
         />
-        <button 
-          type="submit" 
-          className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-medium py-2 px-6 rounded-lg transition duration-150 text-sm shadow-sm"
-        >
-          Add
+        <input
+          name="description"
+          type="text"
+          placeholder="Task Description..."
+          className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+        />
+        <button type="submit" className="bg-indigo-600 text-white font-medium py-2 rounded-lg text-sm">
+          Add Task
         </button>
       </form>
 
