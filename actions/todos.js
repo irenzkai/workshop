@@ -1,106 +1,158 @@
 'use server';
 
-import pool from '@/db';
-import { jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'secure_fallback_secret_key_32_characters_long'
-);
+const BASE_API_URL = 'https://htc.klaro.rodentskie.com/api/todos';
 
-async function getUserIdFromSession() {
-  // AWAIT the cookies() function
+/**
+ * Helper function to retrieve the current user's session token 
+ * and format it as an Authorization header.
+ */
+async function getAuthHeaders() {
   const cookieStore = await cookies();
   const session = cookieStore.get('session')?.value;
   
-  if (!session) return null;
+  if (!session) return {};
   
-  try {
-    const { payload } = await jwtVerify(session, JWT_SECRET);
-    return payload.userId;
-  } catch (err) {
-    return null;
-  }
+  return {
+    'Authorization': `Bearer ${session}`
+  };
 }
 
+/**
+ * 1. GET - Fetch todos from the external API
+ */
 export async function getTodos() {
-  const userId = await getUserIdFromSession();
-  if (!userId) return [];
   try {
-    const result = await pool.query('SELECT * FROM todos WHERE user_id = $1 ORDER BY id DESC', [userId]);
-    return result.rows;
+    const authHeaders = await getAuthHeaders();
+    
+    const response = await fetch(BASE_API_URL, {
+      method: 'GET',
+      headers: {
+        ...authHeaders,
+      },
+      next: { revalidate: 0 } // Disable fetch caching to ensure real-time data
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
+    }
+
+    return await response.json();
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching external todos:', err);
     return [];
   }
 }
 
+/**
+ * 2. POST - Add a new todo to the external API
+ */
 export async function addTodo(formData) {
-  const userId = await getUserIdFromSession();
-  if (!userId) return { error: 'Unauthorized' };
-
   const title = formData.get('title')?.trim();
   if (!title) return { error: 'To-do name cannot be empty.' };
 
   try {
-    await pool.query('INSERT INTO todos (user_id, title) VALUES ($1, $2)', [userId, title]);
+    const authHeaders = await getAuthHeaders();
+
+    const response = await fetch(BASE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      body: JSON.stringify({ title }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
+    }
   } catch (err) {
-    console.error(err);
-    return { error: 'Could not create task.' };
+    console.error('Error adding external todo:', err);
+    return { error: 'Failed to save task to the remote API.' };
   }
 
   revalidatePath('/todos');
 }
 
+/**
+ * 3. PATCH - Toggle task completion state on the external API
+ */
 export async function toggleTodo(id, completed) {
-  const userId = await getUserIdFromSession();
-  if (!userId) return { error: 'Unauthorized' };
-
   try {
-    await pool.query('UPDATE todos SET completed = $1 WHERE id = $2 AND user_id = $3', [
-      completed,
-      id,
-      userId,
-    ]);
+    const authHeaders = await getAuthHeaders();
+
+    const response = await fetch(`${BASE_API_URL}/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      body: JSON.stringify({ completed }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
+    }
   } catch (err) {
-    console.error(err);
-    return { error: 'Could not update task.' };
+    console.error('Error toggling external todo:', err);
+    return { error: 'Failed to update completion state on the remote API.' };
   }
 
   revalidatePath('/todos');
 }
 
-export async function deleteTodo(id) {
-  const userId = await getUserIdFromSession();
-  if (!userId) return { error: 'Unauthorized' };
-
-  try {
-    await pool.query('DELETE FROM todos WHERE id = $1 AND user_id = $2', [id, userId]);
-  } catch (err) {
-    console.error(err);
-    return { error: 'Could not delete task.' };
-  }
-
-  revalidatePath('/todos');
-}
-
+/**
+ * 4. PATCH - Edit task title on the external API
+ */
 export async function updateTodoTitle(id, title) {
-  const userId = await getUserIdFromSession();
-  if (!userId) return { error: 'Unauthorized' };
-
   const trimmedTitle = title?.trim();
   if (!trimmedTitle) return { error: 'Title is required.' };
 
   try {
-    await pool.query('UPDATE todos SET title = $1 WHERE id = $2 AND user_id = $3', [
-      trimmedTitle,
-      id,
-      userId,
-    ]);
+    const authHeaders = await getAuthHeaders();
+
+    const response = await fetch(`${BASE_API_URL}/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      body: JSON.stringify({ title: trimmedTitle }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
+    }
   } catch (err) {
-    console.error(err);
-    return { error: 'Failed to update task.' };
+    console.error('Error updating external todo title:', err);
+    return { error: 'Failed to update title on the remote API.' };
+  }
+
+  revalidatePath('/todos');
+}
+
+/**
+ * 5. DELETE - Remove a todo from the external API
+ */
+export async function deleteTodo(id) {
+  try {
+    const authHeaders = await getAuthHeaders();
+
+    const response = await fetch(`${BASE_API_URL}/${id}`, {
+      method: 'DELETE',
+      headers: {
+        ...authHeaders,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
+    }
+  } catch (err) {
+    console.error('Error deleting external todo:', err);
+    return { error: 'Failed to delete task from the remote API.' };
   }
 
   revalidatePath('/todos');
